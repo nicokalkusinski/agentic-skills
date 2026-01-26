@@ -1,12 +1,14 @@
 ---
-name: exhaustive-coverage-tests
-description: Write high-signal, contract-style tests with clear human-readable intent, modular helpers/fixtures, and exhaustive branch coverage—portable across repos.
+name: lunatic-test-coverage
+description: Generate contract-style tests that make behavior explicit and hard to accidentally break. The skill starts by requiring scoped targets and expected contracts, then drives coverage from realistic risks and invariants, producing a focused unit-heavy suite with a small number of integration tests only where wiring, middleware, serialization, DB semantics, caching, or auth would otherwise be untested. Tests are deterministic and repo-native, they reuse the project’s existing runner and conventions, avoid flaky snapshots and redundant coverage, include negative cases for dependency failures and fail-closed security behavior, and optionally add non-blocking xfail/todo tests to document desired future behavior without breaking CI.
 metadata:
-  Version: 1.4.0
+  Version: 1.5.0
   Last Updated: Jan 26, 2026
 
   Author(s):
     - Nico Kalkusinski (for Multiverse Computing)
+
+  short-description: Write contract-style tests, spec-readable, unit-first, edge-complete, repo-native.
   
   Versioning:
     Scheme: Semantic Versioning (MAJOR.MINOR.PATCH)
@@ -29,7 +31,7 @@ Do not assume any existing files, naming conventions, or frameworks beyond what 
 
 ## 0 Ask the developer what to cover (required)
 
-Before writing any tests, ask the developer to specify scope. Do not proceed until you have clear answers.
+Before writing any tests, ask the developer to specify scope. If answers are incomplete, proceed by inferring scope from the repo and state assumptions.
 
 Ask:
 - Which **files** should be covered (paths)?
@@ -122,7 +124,127 @@ Rules:
 - Avoid two tests that fail for the same regression unless they catch different failure classes.
 - Prefer unit tests by default; integration tests must earn their cost (see 2.1).
 
-## 3 Exhaustiveness checklist (what to cover)
+### 2.3 Test level selection rules (required)
+
+Use this section to choose the RIGHT LEVEL (unit vs integration vs e2e) for each contract/invariant.
+It defines what each level is responsible for, so you avoid duplicate coverage across levels.
+After choosing the level, use section 3 to generate the concrete test cases for that contract.
+
+#### Unit tests should test (at minimum when applicable)
+Core logic and contracts, with exhaustive branching on meaningful decision points:
+- Input validation and error mapping
+  - Missing fields, wrong types, invalid formats, invalid enums
+  - Structured error shape and stable error codes (if applicable)
+- Branching and boundary conditions
+  - Off-by-one limits, empty vs whitespace, casing, unicode normalization
+  - Min, max, just under, just over for lengths, ranges, counts
+- Security checks when local to the unit
+  - Permission decisions, policy evaluation, scope checks
+  - Fail-closed behavior when verification input is absent or invalid
+- Time and expiration logic
+  - At expiry, just before, just after, clock skew handling (if implemented)
+- Idempotency and deduplication logic
+  - Same request repeated, same idempotency key, replay inputs
+- Serialization and normalization
+  - Canonicalization does not widen permissions
+  - Parsing never crashes on invalid input, returns safe errors
+- Cache key construction and caching decisions (logic only)
+  - Key stability, namespace separation, negative caching decisions
+- Retry/backoff selection logic (if present)
+  - No infinite loops, correct max attempts, correct classification of retryable errors
+- “No secret leakage” in returned errors or logs (where testable)
+  - Errors should not contain tokens, passwords, secrets, raw credentials
+
+Preferred style:
+- Parameterized tests for input families (invalid formats, whitespace, unicode, boundary values).
+- Property-based tests only if the repo already uses them, or if they are lightweight and high value.
+
+#### Integration tests should test (only when they earn their cost)
+Wiring across real components where unit tests would miss regressions:
+- Request parsing and framework integration
+  - Content-Type parsing, JSON decoding, form parsing, headers, cookies, middleware
+- Auth wiring
+  - Middleware/guard integration, session/cookie parsing, signature verification wiring
+  - Fail closed when verification cannot run (key missing, verifier error)
+- DB and transaction semantics
+  - Unique constraints, foreign keys, migrations assumptions, rollback behavior
+  - Concurrency-sensitive invariants (best-effort, deterministic)
+- Cache integration
+  - Cache hit and miss behavior across layers
+  - Invalidation paths for updates, namespace isolation
+- Serialization boundaries
+  - Actual API response schema, status codes, and important headers
+- Background job enqueueing (if present)
+  - Correct job payload and enqueue call, without running real workers unless repo already does it
+- External service boundaries, using stubs not real network
+  - Contract with stub server or fake client, timeouts and error mapping
+
+Integration tests must include at least one “negative integration” where relevant:
+- Dependency outage or exception should not allow access and should produce safe errors.
+
+Negative integration tests are REQUIRED whenever a scoped behavior depends on a component that can fail:
+- auth verifier/signature key fetch
+- DB transaction/write
+- cache read/write
+- outbound HTTP/service call
+- background job enqueue
+The test must prove safe failure behavior (fail closed for security decisions, safe error mapping otherwise).
+
+
+#### E2E tests (allowed to bootstrap infrastructure, but must earn their cost)
+
+E2E tests are OPTIONAL and should be added only when they catch a class of regression that unit + integration will not.
+If e2e infrastructure does not exist, you MAY create it, but only via the Bootstrap Policy below.
+
+##### When to add E2E
+Add 1–5 e2e smoke tests only if at least one is true:
+- The critical risk is cross-process or cross-layer behavior that integration cannot realistically prove
+  (example: auth redirect flow, cookie/session persistence, full request chain through proxy/middleware).
+- The product has a small number of “must never break” journeys that define usability or revenue.
+- The system is a web app where browser behavior is part of the contract (not just APIs).
+
+If none apply, do NOT add e2e tests, keep the suite unit-heavy with targeted integration tests.
+
+##### E2E Bootstrap Policy (required if infra is missing)
+If you create e2e infrastructure:
+1. Keep it minimal, reversible, and aligned with the repo’s stack.
+   - Prefer API-level e2e over browser e2e when it gives the same confidence.
+   - Use the existing language ecosystem and runner where possible.
+2. Avoid heavy new dependencies unless unavoidable.
+   - Only introduce Playwright/Cypress when browser behavior is truly required.
+   - If browser is required, default to Playwright (headless) unless repo already uses another tool.
+3. Make it hermetic and deterministic:
+   - No real network, stub external services.
+   - Use ephemeral ports, no hardcoded localhost ports.
+   - Control time and randomness (fixed seeds).
+4. Handle data and state safely:
+   - Use an ephemeral DB strategy (in-memory if possible).
+   - If a real DB is required, use lightweight containers ONLY if the repo already uses Docker in dev/CI,
+     otherwise provide a fallback mode that skips e2e by default and documents how to enable it.
+5. Keep runtime small:
+   - Target < 2–5 minutes for all e2e tests combined in CI.
+   - Tag e2e tests as "slow" and make it easy to run separately.
+6. Update TEST INVENTORY:
+   - Explain why e2e was needed and what unique regressions it catches.
+   - Document the exact command to run e2e locally and in CI.
+
+##### Default e2e scope
+- Implement 1–3 top user journeys (happy path).
+- Add 1 fail-closed security scenario if auth exists (unauthorized cannot access).
+- Add 1 resilience scenario if critical (dependency down does not allow access, safe error).
+
+### Snapshot tests policy
+Avoid snapshot tests unless the repo already relies on them and the output is stable.
+Prefer explicit assertions on key fields instead of brittle snapshots.
+
+## 3 Exhaustiveness checklist (case generation within the chosen level)
+
+After selecting the test level using section 2.3, use this checklist to generate the concrete cases for each function/endpoint/story at that level.
+This section is about edge cases and completeness within a level, not about choosing unit vs integration vs e2e.
+
+### Exhaustive coverage scope (required)
+“Exhaustive branch coverage” applies to decision logic that affects contracts and invariants, for example validation, auth/permissions, state transitions, parsing/normalization, idempotency, time/expiry, and boundary handling.
+Do NOT chase exhaustive branches for trivial wrappers, logging, framework boilerplate, or third-party library behavior.
 
 For each function/endpoint/story, cover at least:
 - Success path (happy contract).
@@ -138,18 +260,16 @@ For each function/endpoint/story, cover at least:
   - idempotency (repeating requests)
   - caching behavior (cached result stability; cache invalidation)
 
-### 3.1 Use parametrization and property tests for input families (recommended)
+### 3.1 Case design methods (required)
+Generate cases systematically using these techniques (pick what applies):
+- Equivalence partitions: groups of inputs that should behave the same (valid, invalid-format, missing).
+- Boundary values: min, max, just-under, just-over (lengths, limits, expiry).
+- Decision tables: combinations where behavior changes based on multiple inputs/flags (role × state × feature flag).
+- State transitions: workflows and lifecycles (issued → used → revoked), including replay.
+- Pairwise coverage: when many options exist, cover pairs instead of all combinations.
 
-Use parametrization/table-driven tests for families of similar cases.
+Prefer parameterization/table-driven tests for these case families.
 
-When testing parsers/normalizers/validators, prefer “one test + many cases” over many near-identical tests:
-- Use table-driven/parameterized tests for known edge-case families (whitespace, encoding, case, empty inputs).
-- If the repo/tooling supports it, consider property-based tests for invariants such as:
-  - “Parsing then re-encoding is stable/canonical.”
-  - “Invalid inputs never crash; they return a safe error.”
-  - “Normalization does not widen permissions.”
-
-Do not introduce heavy new dependencies unless the repo already uses them.
 
 ## 4 Contract style: how tests should read
 
@@ -175,13 +295,14 @@ Template (adapt to the test runner’s conventions):
 ```
 
 ### 4.2 One-line intent comment
-Start each test with exactly **one** plain-English comment describing the contract:
+Start each test with a plain-English comment describing the contract:
 - `# Missing required fields should return a structured error.`
 - `# On success, returns a redirect including code and preserves state.`
 - `# If the cache backend fails, fail closed (deny) rather than allow.`
 - `# Current behavior: <behavior>; Desired behavior: <better behavior>.`
 
-Avoid long docstrings inside tests unless your framework requires them.
+You MAY add short inline comments only when they clarify a non-obvious setup step (for example: “freeze time at expiry boundary”, “simulate verifier failure”), but do not add extra narrative blocks.
+Parameterized/table-driven tests still begin with a single contract line, and each case should have a short case label/ID.
 
 ### 4.3 Arrange–Act–Assert, kept tight
 Keep each test short and scannable:
@@ -190,6 +311,16 @@ Keep each test short and scannable:
 - Assert: verify status/result + key side-effects
 
 If a test goes long due to repeated setup, extract a helper/fixture.
+
+### 4.4 Assertions: what to verify (required)
+Assertions must prove the contract, not just “it failed”.
+
+When testing API/handler-like code:
+- On success: assert status/result plus the minimum stable fields that define the contract (do not snapshot entire payloads).
+- On error: assert status + machine-readable error code/type (if present) + error shape (required fields) + that secrets are not present.
+- If side-effects are part of the contract: assert the side-effect (DB write, cache invalidation, job enqueued). Otherwise, avoid over-asserting internals.
+
+Avoid asserting on full error strings unless the repo treats them as stable API.
 
 ## 5 Modularity rules (helpers + fixtures)
 
