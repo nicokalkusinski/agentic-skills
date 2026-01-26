@@ -73,6 +73,31 @@ Default policy:
 - For any single behavior/contract, prefer to test it at **one** level.
 - Add a second-level test only when it catches a different class of regression (see “Integration must earn its cost” below).
 
+### 1.2 Monorepos and multi-runner repos (required when applicable)
+
+Some repos contain multiple packages, languages, or test runners.
+
+Rules:
+1. Detect scope boundaries first.
+   - Identify which package or service owns the code under test.
+   - Prefer the test runner that package uses, even if other runners exist elsewhere in the repo.
+
+2. Follow how CI runs tests.
+   - If CI runs per-package commands, mirror that structure.
+   - Do not introduce a new repo-wide runner unless the repo already standardizes on one.
+
+3. Keep changes local.
+   - Add tests and small helpers within the owning package’s test root.
+   - Avoid adding root-level dependencies or configs when only one package needs tests.
+
+4. When multiple runners exist in the same package:
+   - Pick the runner referenced by that package’s scripts (for example `package.json` scripts) or the runner used by existing tests in that package.
+   - If still ambiguous, pick the runner invoked in CI for that package.
+
+5. Document the command precisely.
+   - Provide the exact per-package command to run the new tests, plus any required working directory.
+
+
 ## 2 Choose the right test level (unit vs integration)
 
 Pick the lowest-cost test that still provides real confidence.
@@ -240,7 +265,20 @@ Prefer explicit assertions on key fields instead of brittle snapshots.
 ## 3 Exhaustiveness checklist (case generation within the chosen level)
 
 After selecting the test level using section 2.3, use this checklist to generate the concrete cases for each function/endpoint/story at that level.
-This section is about edge cases and completeness within a level, not about choosing unit vs integration vs e2e.
+
+Exhaustive coverage applies only to decision points that define contracts and invariants.
+Cover every meaningful branch where the externally observed behavior can differ, including:
+- validation and error mapping
+- authorization and policy decisions (fail closed)
+- state transitions and idempotency
+- time and expiration boundaries
+- parsing, normalization, and serialization decisions
+- caching decisions that affect correctness or security
+
+Non-goal:
+- Do NOT chase branches in trivial wrappers, logging, framework glue, or third-party libraries.
+- Do NOT add tests whose only purpose is to increase line or branch metrics.
+- If a branch does not change the contract, it does not need its own test.
 
 ### Exhaustive coverage scope (required)
 “Exhaustive branch coverage” applies to decision logic that affects contracts and invariants, for example validation, auth/permissions, state transitions, parsing/normalization, idempotency, time/expiry, and boundary handling.
@@ -263,13 +301,12 @@ For each function/endpoint/story, cover at least:
 ### 3.1 Case design methods (required)
 Generate cases systematically using these techniques (pick what applies):
 - Equivalence partitions: groups of inputs that should behave the same (valid, invalid-format, missing).
-- Boundary values: min, max, just-under, just-over (lengths, limits, expiry).
+- Boundary values: null/none, empty collections, zero, negatives, capacity limits, min, max, just-under, just-over (lengths, limits, expiry).
 - Decision tables: combinations where behavior changes based on multiple inputs/flags (role × state × feature flag).
 - State transitions: workflows and lifecycles (issued → used → revoked), including replay.
 - Pairwise coverage: when many options exist, cover pairs instead of all combinations.
 
 Prefer parameterization/table-driven tests for these case families.
-
 
 ## 4 Contract style: how tests should read
 
@@ -411,25 +448,3 @@ Do not use xfail/skip to hide flaky tests.
 Deliver:
 - New/updated test files implementing the contracts above.
 - Minimal changes outside tests (only add utilities if the repo’s conventions require it).
-
-Also include:
-- A short “test matrix” in your working notes (not in code) mapping behaviors → tests, so coverage is intentional.
-- The exact command(s) to run the new tests in this repo (the repo’s standard test command when available).
-
-## 10 Minimal pytest starter (use only when pytest is the project’s runner)
-
-If the repo uses pytest, follow this skeleton style (adapt names to the domain):
-
-```python
-# Contract tests: behavior we rely on and want to keep stable.
-# Desired-behavior tests (if any) are marked xfail/todo so they don't block CI.
-
-import pytest
-
-def _json(resp):
-    return resp.json()  # or json.loads(resp.content) depending on stack
-
-def test_example():
-    # Missing required fields should return a structured error.
-    ...
-```
