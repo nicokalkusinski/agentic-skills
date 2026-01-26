@@ -47,21 +47,20 @@ Do not assume any existing files, naming conventions, frameworks, or languages b
 
 ## 0 Ask the developer what to cover (mandatory)
 
-Before writing any tests, ask the developer to specify scope. If answers are incomplete, proceed by inferring scope from the repo and state assumptions.
+Before writing any tests, require the developer to specify the **targets** (items 1–2). Everything else has sensible defaults; proceed unless the developer overrides them, and state any assumptions you make.
 
-Ask:
-- Which **files** should be covered (paths)?
-- Which **modules/classes/functions** should be covered (names/symbols)?
-- Which **behaviors/invariants** must be guaranteed (success + failure cases)?
-- Any constraints: “no DB”, “no network”, “unit-only”, “integration required”, “must be deterministic”, etc.
-- The command they expect to use in Docker/CI/local to run tests (if known).
-- Any other comments or extra instructions from the developer that you should respect when writing tests.
-- Preferred test strategy:
-  - “Unit-heavy + thin integration layer” (default recommendation)
-  - “Integration-heavy” (only when system wiring is the primary risk)
-- Budget constraints:
-  - Max acceptable runtime for the test suite (CI minutes)
-  - Flakiness tolerance (ideally zero; ask what is acceptable)
+### Required inputs (developer must specify)
+1. Which **files** should be covered (paths)?
+2. Which **modules/classes/functions** should be covered (names/symbols)?
+
+If either is missing, ask follow-ups. If the developer cannot provide them, infer likely targets from the repo and clearly label that as an assumption.
+
+### Defaults (use unless overridden)
+- **Behaviors/invariants**: infer from the current code and stabilize current externally observed behavior (success + failure + boundaries). Also add a small number of non-blocking “desired behavior” tests when they help surface likely blindspots or underspecified edge cases (clearly labeled + reason).
+- **Constraints**: deterministic; no real network; prefer unit tests; add integration tests only when they earn their cost; use the repo’s existing test harnesses (DB, containers, etc.) if present, otherwise prefer fakes/in-memory.
+- **How to run tests**: infer from repo tooling/CI (scripts/config); provide the exact command you ran (or recommend).
+- **Strategy**: “Unit-heavy + thin integration layer”.
+- **Budget**: keep added tests fast and reliable; flakiness tolerance 0; add a small number of e2e smoke tests when they provide unique, meaningful value (per E2E guidance), otherwise avoid.
 
 ## 1 Detect the project’s testing setup
 
