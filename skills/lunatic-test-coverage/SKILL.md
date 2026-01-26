@@ -1,14 +1,14 @@
 ---
 name: lunatic-test-coverage
-description: Generate contract-style tests that make behavior explicit and hard to accidentally break. The skill starts by requiring scoped targets and expected contracts, then drives coverage from realistic risks and invariants, producing a focused unit-heavy suite with a small number of integration tests only where wiring, middleware, serialization, DB semantics, caching, or auth would otherwise be untested. Tests are deterministic and repo-native, they reuse the project’s existing runner and conventions, avoid flaky snapshots and redundant coverage, include negative cases for dependency failures and fail-closed security behavior, and optionally add non-blocking xfail/todo tests to document desired future behavior without breaking CI.
+description: Generate behavior-first tests that lock in expected behavior and make regressions hard. Start by requiring scoped targets and expected behavior, then drive coverage from realistic risks and invariants. Prefer a focused unit-heavy suite; add a small number of integration tests only where wiring, serialization, DB semantics, caching, auth, or middleware would otherwise be untested. Keep tests deterministic and repo-native, reuse the project’s runner and conventions, avoid flaky snapshots and redundant coverage, include negative cases (including fail-closed security behavior), and optionally add non-blocking “desired behavior” tests (xfail/todo/skip with a reason) to document future improvements without breaking CI.
 metadata:
-  Version: 1.5.0
+  Version: 1.6.0
   Last Updated: Jan 26, 2026
 
   Author(s):
     - Nico Kalkusinski (for Multiverse Computing)
 
-  short-description: Write contract-style tests, spec-readable, unit-first, edge-complete, repo-native.
+  short-description: Write behavior-first tests: spec-readable, unit-first, edge-complete, repo-native.
   
   Versioning:
     Scheme: Semantic Versioning (MAJOR.MINOR.PATCH)
@@ -23,20 +23,36 @@ metadata:
       - Tighten ambiguous instructions without changing expected deliverables.
 ---
 
-Generate tests in a **contract-test style**:
-- “Contract tests” specify behavior we rely on and want to keep stable.
-- Optional “desired behavior” tests can describe improvements without breaking CI (mark as `xfail`/`todo`/skipped with a clear reason).
+Generate tests in a **behavioral stability** style:
+- “Behavioral stability tests” specify behavior you rely on and want to keep stable (unit, integration, and e2e).
+- Optional “desired behavior” tests describe improvements without breaking CI (mark as `xfail`/`todo`/skipped with a clear reason).
 
-Do not assume any existing files, naming conventions, or frameworks beyond what you can infer from the repo itself.
+Do not assume any existing files, naming conventions, frameworks, or languages beyond what you can infer from the repo itself.
 
-## 0 Ask the developer what to cover (required)
+## Priority levels
+
+- **Mandatory**: do this unless the developer explicitly opts out.
+- **Recommended**: do this by default; skip only with a clear reason.
+- **Optional**: do this only when it buys unique confidence.
+
+## Quick workflow checklist (mandatory)
+
+1. Ask for scope and constraints (section 0).
+2. Detect the runner and conventions (section 1).
+3. Build risks → invariants → a test matrix (section 2.2).
+4. Choose the right test level per invariant (section 2.3).
+5. Generate cases systematically (section 3).
+6. Write tests in a behavior-first style (sections 4–8).
+7. Run the tests and do a final self-review before finishing (section 10).
+
+## 0 Ask the developer what to cover (mandatory)
 
 Before writing any tests, ask the developer to specify scope. If answers are incomplete, proceed by inferring scope from the repo and state assumptions.
 
 Ask:
 - Which **files** should be covered (paths)?
 - Which **modules/classes/functions** should be covered (names/symbols)?
-- Which **behaviors/contracts** must be guaranteed (success + failure cases)?
+- Which **behaviors/invariants** must be guaranteed (success + failure cases)?
 - Any constraints: “no DB”, “no network”, “unit-only”, “integration required”, “must be deterministic”, etc.
 - The command they expect to use in Docker/CI/local to run tests (if known).
 - Any other comments or extra instructions from the developer that you should respect when writing tests.
@@ -62,18 +78,18 @@ Ask:
    - Go: package directories containing `*_test.go`
    - Java: `src/test/`
 
-### 1.1 Follow a testing pyramid (required)
+### 1.1 Follow a testing pyramid (recommended)
 
 Aim for the “pyramid” shape that senior engineers typically optimize for:
 - Many fast **unit tests** (cheap, deterministic, exhaustive branching).
 - Fewer **integration tests** (high-value end-to-end flows that catch wiring/state issues).
-- Avoid “three copies” of the same contract (unit + integration + legacy/duplicate file).
+- Avoid “three copies” of the same behavior (unit + integration + legacy/duplicate file).
 
 Default policy:
-- For any single behavior/contract, prefer to test it at **one** level.
+- For any single behavior/invariant, prefer to test it at **one** level.
 - Add a second-level test only when it catches a different class of regression (see “Integration must earn its cost” below).
 
-### 1.2 Monorepos and multi-runner repos (required when applicable)
+### 1.2 Monorepos and multi-runner repos (mandatory when applicable)
 
 Some repos contain multiple packages, languages, or test runners.
 
@@ -110,7 +126,7 @@ Prefer **integration tests** when:
 - Confidence depends on wiring across layers (routing → handler → DB → cache, middleware, signals/hooks, auth).
 - Mocking would “mock away” the risk (content-type parsing, session/cookies, serialization, cache invalidation).
 
-### 2.1 Integration must earn its cost (required)
+### 2.1 Integration must earn its cost (mandatory)
 
 Before adding an integration test, answer these explicitly (in your working notes):
 - What specific regression could happen that a unit test would not catch?
@@ -119,11 +135,11 @@ Before adding an integration test, answer these explicitly (in your working note
 
 If you cannot answer these, prefer a unit test instead.
 
-### 2.2 Risk model → invariants → test matrix (required)
+### 2.2 Risks → invariants → test matrix (recommended)
 
 To avoid “tests for the sake of tests”, drive coverage from *realistic risks* and *invariants*.
 
-#### 2.2.1 Build a risk model (required)
+#### 2.2.1 Build a risk model (recommended)
 
 Write a short list of realistic failure modes for the scoped code. Examples (adapt to the domain):
 - Security: authorization bypass, privilege escalation, replay, open redirects, sensitive-data leakage.
@@ -132,14 +148,14 @@ Write a short list of realistic failure modes for the scoped code. Examples (ada
 - Concurrency: double-submit, race conditions, duplicate consumption, inconsistent writes.
 - Interop: case/encoding differences, content-type quirks, backwards compatibility.
 
-#### 2.2.2 Define invariants (required)
+#### 2.2.2 Define invariants (mandatory)
 
 For each major risk, write 1–3 invariants in “must always” form. Examples:
 - “A consumed one-time token can never be used again (even concurrently).”
 - “When authorization cannot be verified, the system denies access (fail closed).”
 - “Errors never include secrets or raw tokens.”
 
-#### 2.2.3 Create a test matrix (required)
+#### 2.2.3 Create a test matrix (recommended)
 
 Create a small table in your working notes mapping:
 - Invariant → tests that prove it → test level (unit/integration/e2e) → why that level is necessary.
@@ -149,14 +165,14 @@ Rules:
 - Avoid two tests that fail for the same regression unless they catch different failure classes.
 - Prefer unit tests by default; integration tests must earn their cost (see 2.1).
 
-### 2.3 Test level selection rules (required)
+### 2.3 Test level selection rules (mandatory)
 
-Use this section to choose the RIGHT LEVEL (unit vs integration vs e2e) for each contract/invariant.
+Use this section to choose the RIGHT LEVEL (unit vs integration vs e2e) for each behavior/invariant.
 It defines what each level is responsible for, so you avoid duplicate coverage across levels.
-After choosing the level, use section 3 to generate the concrete test cases for that contract.
+After choosing the level, use section 3 to generate the concrete test cases for that behavior.
 
 #### Unit tests should test (at minimum when applicable)
-Core logic and contracts, with exhaustive branching on meaningful decision points:
+Core logic and behaviors, with exhaustive branching on meaningful decision points:
 - Input validation and error mapping
   - Missing fields, wrong types, invalid formats, invalid enums
   - Structured error shape and stable error codes (if applicable)
@@ -204,16 +220,16 @@ Wiring across real components where unit tests would miss regressions:
 - External service boundaries, using stubs not real network
   - Contract with stub server or fake client, timeouts and error mapping
 
-Integration tests must include at least one “negative integration” where relevant:
-- Dependency outage or exception should not allow access and should produce safe errors.
+If you add integration tests around a boundary that can fail, include at least one “negative integration” when it provides unique confidence (recommended):
+- Dependency outage/exception yields safe errors.
+- Security-relevant decisions fail closed (deny) when verification cannot be performed.
 
-Negative integration tests are REQUIRED whenever a scoped behavior depends on a component that can fail:
+Regardless of test level, cover dependency failures when they change externally observed behavior or security posture (recommended when applicable):
 - auth verifier/signature key fetch
 - DB transaction/write
 - cache read/write
 - outbound HTTP/service call
 - background job enqueue
-The test must prove safe failure behavior (fail closed for security decisions, safe error mapping otherwise).
 
 
 #### E2E tests (allowed to bootstrap infrastructure, but must earn their cost)
@@ -226,7 +242,7 @@ Add 1–5 e2e smoke tests only if at least one is true:
 - The critical risk is cross-process or cross-layer behavior that integration cannot realistically prove
   (example: auth redirect flow, cookie/session persistence, full request chain through proxy/middleware).
 - The product has a small number of “must never break” journeys that define usability or revenue.
-- The system is a web app where browser behavior is part of the contract (not just APIs).
+- The system is a web app where browser behavior is part of the stable behavior surface (not just APIs).
 
 If none apply, do NOT add e2e tests, keep the suite unit-heavy with targeted integration tests.
 
@@ -266,7 +282,7 @@ Prefer explicit assertions on key fields instead of brittle snapshots.
 
 After selecting the test level using section 2.3, use this checklist to generate the concrete cases for each function/endpoint/story at that level.
 
-Exhaustive coverage applies only to decision points that define contracts and invariants.
+Exhaustive coverage applies only to decision points that define behaviors and invariants.
 Cover every meaningful branch where the externally observed behavior can differ, including:
 - validation and error mapping
 - authorization and policy decisions (fail closed)
@@ -278,14 +294,14 @@ Cover every meaningful branch where the externally observed behavior can differ,
 Non-goal:
 - Do NOT chase branches in trivial wrappers, logging, framework glue, or third-party libraries.
 - Do NOT add tests whose only purpose is to increase line or branch metrics.
-- If a branch does not change the contract, it does not need its own test.
+- If a branch does not change externally observed behavior, it does not need its own test.
 
-### Exhaustive coverage scope (required)
-“Exhaustive branch coverage” applies to decision logic that affects contracts and invariants, for example validation, auth/permissions, state transitions, parsing/normalization, idempotency, time/expiry, and boundary handling.
+### Exhaustive coverage scope (recommended)
+“Exhaustive branch coverage” applies to decision logic that affects behaviors and invariants, for example validation, auth/permissions, state transitions, parsing/normalization, idempotency, time/expiry, and boundary handling.
 Do NOT chase exhaustive branches for trivial wrappers, logging, framework boilerplate, or third-party library behavior.
 
 For each function/endpoint/story, cover at least:
-- Success path (happy contract).
+- Success path (happy path).
 - Missing required inputs (validation errors).
 - Unsupported/invalid inputs (type/format/enum violations).
 - Security-sensitive failures (fail closed):
@@ -298,7 +314,7 @@ For each function/endpoint/story, cover at least:
   - idempotency (repeating requests)
   - caching behavior (cached result stability; cache invalidation)
 
-### 3.1 Case design methods (required)
+### 3.1 Case design methods (recommended)
 Generate cases systematically using these techniques (pick what applies):
 - Equivalence partitions: groups of inputs that should behave the same (valid, invalid-format, missing).
 - Boundary values: null/none, empty collections, zero, negatives, capacity limits, min, max, just-under, just-over (lengths, limits, expiry).
@@ -308,13 +324,13 @@ Generate cases systematically using these techniques (pick what applies):
 
 Prefer parameterization/table-driven tests for these case families.
 
-## 4 Contract style: how tests should read
+## 4 Behavior-first style: how tests should read
 
-### 4.1 File header: what this module covers (required)
+### 4.1 File header: what this module covers (recommended)
 
 At the top of **each** test file/module, add a short description block that answers:
 - What this test module is for (scope/purpose).
-- What it covers (contracts/invariants/endpoints/functions).
+- What it covers (behaviors/invariants/endpoints/functions).
 - What it explicitly does **not** cover (non-goals, out-of-scope behaviors, covered elsewhere).
 
 Keep this block brief and scannable. Prefer 3–8 bullet lines.
@@ -324,22 +340,22 @@ Template (adapt to the test runner’s conventions):
 ```text
 # Purpose: <1 sentence>
 # Covers:
-# - <contract/invariant/area>
-# - <contract/invariant/area>
+# - <behavior/invariant/area>
+# - <behavior/invariant/area>
 # Does not cover:
 # - <explicit non-goal / covered by other layer>
 # - <explicit non-goal / covered by other layer>
 ```
 
 ### 4.2 One-line intent comment
-Start each test with a plain-English comment describing the contract:
+Start each test with a plain-English comment describing the behavior/invariant:
 - `# Missing required fields should return a structured error.`
 - `# On success, returns a redirect including code and preserves state.`
 - `# If the cache backend fails, fail closed (deny) rather than allow.`
 - `# Current behavior: <behavior>; Desired behavior: <better behavior>.`
 
 You MAY add short inline comments only when they clarify a non-obvious setup step (for example: “freeze time at expiry boundary”, “simulate verifier failure”), but do not add extra narrative blocks.
-Parameterized/table-driven tests still begin with a single contract line, and each case should have a short case label/ID.
+Parameterized/table-driven tests still begin with a single intent line, and each case should have a short case label/ID.
 
 ### 4.3 Arrange–Act–Assert, kept tight
 Keep each test short and scannable:
@@ -349,13 +365,13 @@ Keep each test short and scannable:
 
 If a test goes long due to repeated setup, extract a helper/fixture.
 
-### 4.4 Assertions: what to verify (required)
-Assertions must prove the contract, not just “it failed”.
+### 4.4 Assertions: what to verify (mandatory)
+Assertions must prove the behavior/invariant, not just “it failed”.
 
 When testing API/handler-like code:
-- On success: assert status/result plus the minimum stable fields that define the contract (do not snapshot entire payloads).
+- On success: assert status/result plus the minimum stable fields that define the behavior (do not snapshot entire payloads).
 - On error: assert status + machine-readable error code/type (if present) + error shape (required fields) + that secrets are not present.
-- If side-effects are part of the contract: assert the side-effect (DB write, cache invalidation, job enqueued). Otherwise, avoid over-asserting internals.
+- If side-effects are part of the behavior: assert the side-effect (DB write, cache invalidation, job enqueued). Otherwise, avoid over-asserting internals.
 
 Avoid asserting on full error strings unless the repo treats them as stable API.
 
@@ -375,7 +391,7 @@ Rules:
 - Tests must not share mutable global state.
 - Tests must pass in any order and in parallel (unless the repo explicitly forbids it).
 
-### 5.1 Folder organization (required)
+### 5.1 Folder organization (recommended)
 
 Keep tests modular **and** organized into folders that match the system’s shape.
 
@@ -391,31 +407,29 @@ Example (Python/pytest-style naming):
 
 If the repo already uses a different convention (e.g. `__tests__/oauth/integration/`), follow it.
 
-### 5.2 Avoid duplicate tests (required)
+### 5.2 Avoid duplicate tests (mandatory)
 
 Define “duplicate” as: two tests that would fail for the same underlying regression.
 
 Rules:
-- Do not duplicate a basic validation contract (e.g., “missing required fields returns invalid_request”) at both unit and integration levels unless the integration test is specifically about cross-layer wiring of that validation.
+- Do not duplicate a basic validation behavior (e.g., “missing required fields returns invalid_request”) at both unit and integration levels unless the integration test is specifically about cross-layer wiring of that validation.
 - Do not keep legacy tests that re-check what newer suites already cover, unless they provide unique coverage.
 - Do not keep tests with no meaningful assertions (e.g., string concatenation, asserting on unrelated details, or only asserting “status_code is 400” without checking error type/shape when that matters).
 
 When you find duplicates, keep the cheaper, more deterministic test unless the integration version provides unique wiring/state coverage.
 
-## 6 Mocking / patching rules (critical for correctness)
+## 6 Test doubles (recommended)
 
 General:
-- Prefer **fakes/stubs** over deep mocks when possible.
-- Keep mocking local to a test (context manager / fixture), and assert the minimal set of calls that matter.
-
-For languages with import-based patching (e.g., Python):
-- Patch the symbol at the **lookup location used by the code under test** (where it’s imported/used), not where it’s originally defined.
+- Prefer **fakes/stubs/in-memory implementations** over deep mocks when possible.
+- Replace dependencies at the seam actually used by the code under test (dependency injection, interface/trait boundary, module-level singleton, service locator, etc.).
+- Keep doubles local to a test (fixture/setup/teardown), and assert only the minimal interactions that define the behavior.
 
 Avoid:
-- Mocking the function you are trying to test.
-- Over-asserting implementation details that will cause brittle tests.
+- Mocking the unit you are trying to test.
+- Over-asserting implementation details that cause brittle tests.
 
-## 7 Isolation and determinism
+## 7 Isolation and determinism (mandatory)
 
 Make tests stable:
 - Control time (freeze/patch clocks) for expiration logic.
@@ -427,12 +441,12 @@ Make tests stable:
 
 Avoid these common “looks like coverage but isn’t” patterns:
 - Skipped tests with no plan to re-enable (prefer deleting or converting into a clear `todo/xfail` spec with a reason).
-- Tests that only assert “it errors” without asserting *which* error and *why* (when the error type is part of the contract).
+- Tests that only assert “it errors” without asserting *which* error and *why* (when the error type is part of the stable behavior/API).
 - Tests that are effectively no-ops (assertions that always pass, asserting on unrelated logs, etc.).
 - Integration tests that primarily duplicate unit validation (they add runtime/flake risk without extra confidence).
 - Tests that are not tied to any explicit risk/invariant (add the invariant or remove the test).
 
-## 8 “Desired behavior” tests policy (non-blocking specs)
+## 8 “Desired behavior” tests policy (optional non-blocking specs)
 
 If you want to describe a future improvement without failing CI:
 - Mark the test as expected-to-fail using the idiom of the repo’s test runner:
@@ -446,5 +460,18 @@ Do not use xfail/skip to hide flaky tests.
 ## 9 Output requirements (what you deliver)
 
 Deliver:
-- New/updated test files implementing the contracts above.
+- New/updated test files implementing the behaviors/invariants above.
 - Minimal changes outside tests (only add utilities if the repo’s conventions require it).
+- The exact command to run the new tests (and run it unless the developer opts out).
+
+## 10 Final self-review checklist (mandatory)
+
+Before finishing, double-check:
+- Scope is explicit (what you tested, what you did not, and any assumptions).
+- Tests run with the repo’s runner/conventions, and you provide the exact command you ran.
+- Tests are deterministic (no real network, controlled time/randomness, isolated state).
+- Each test maps to an explicit behavior/invariant (no metric-chasing filler).
+- No redundant coverage (duplicates removed unless they catch different regressions).
+- Negative/failure behavior is covered where it matters (especially security: fail closed).
+
+If you cannot run tests in this environment, say exactly why and still provide the command the developer should run.
