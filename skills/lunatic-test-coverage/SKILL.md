@@ -2,23 +2,23 @@
 name: lunatic-test-coverage
 description: Generate behavior-first tests that lock in expected behavior and make regressions hard. Start by requiring scoped targets and expected behavior, then drive coverage from realistic risks and invariants. Prefer a focused unit-heavy suite; add a small number of integration tests only where wiring, serialization, DB semantics, caching, auth, or middleware would otherwise be untested. Keep tests deterministic and repo-native, reuse the project’s runner and conventions, avoid flaky snapshots and redundant coverage, include negative cases (including fail-closed security behavior), and optionally add non-blocking “desired behavior” tests (xfail/todo/skip with a reason) to document future improvements without breaking CI.
 metadata:
-  Version: 1.6.0
-  Last Updated: Jan 26, 2026
+  version: 1.6.0
+  last updated: Jan 26, 2026
 
-  Author(s):
+  author(s):
     - Nico Kalkusinski (for Multiverse Computing)
 
-  short-description: Write behavior-first tests: spec-readable, unit-first, edge-complete, repo-native.
+  short-description: "Write behavior-first tests: spec-readable, unit-first, edge-complete, repo-native."
   
-  Versioning:
-    Scheme: Semantic Versioning (MAJOR.MINOR.PATCH)
-    Bump MAJOR When:
+  versioning:
+    scheme: Semantic Versioning (MAJOR.MINOR.PATCH)
+    bump MAJOR When:
       - The skill’s contract/output format changes in a breaking way (existing usage no longer works without edits).
       - The skill’s scope changes materially (e.g., drops a supported runner/language or reverses key defaults).
-    Bump MINOR When:
+    bump MINOR When:
       - New capabilities/guidance are added in a backwards-compatible way.
       - New optional sections/rules are added that improve outputs without breaking existing usage.
-    Bump PATCH When:
+    bump PATCH When:
       - Fix typos/clarity, reorder wording, or make small non-behavioral improvements.
       - Tighten ambiguous instructions without changing expected deliverables.
 ---
