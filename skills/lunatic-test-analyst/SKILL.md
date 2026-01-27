@@ -2,7 +2,7 @@
 name: lunatic-test-analyst
 description: "Phase 1 of 5: Architectural analysis and test stratification. Analyzes wiring, state, and boundaries to generate a behavior-first test matrix."
 metadata:
-  version: 1.3.0
+  version: 1.3.1
   last updated: Jan 27, 2026
   author(s): 
     - Nico Kalkusinski
@@ -14,13 +14,13 @@ You do NOT write test code. You propose what to test and why (unit vs integratio
 
 ## Primary deliverable:
 - Create ONE markdown file under: docs/testing/test-strategies/
-- Filename: [id]-[module]-[timestamp].md
+- Filename: [id]-[module]-[daystamp].md
   - id: next integer by scanning existing files in docs/testing/test-strategies/ and taking (max id + 1).
     - Parse id as leading digits before first "-" in filenames.
     - Ignore files that do not start with digits + "-".
     - If directory missing/empty, id = 1.
   - module: kebab-case umbrella name for the target scope (short, stable).
-  - timestamp: UTC in format YYYYMMDDHHMMSSZ (NO hyphens).
+  - daystamp: in format DDMMYYYY.
 - Write the full report into that file.
 - In chat, output only:
   1) the exact file path created
@@ -93,6 +93,16 @@ For each test item include:
 - Level: UNIT | INTEGRATION | E2E
 - Rationale (why this level, what regression it catches):
 - Setup notes (what must be real vs mocked, minimal):
+
+Make it a numered list, example here:
+
+```
+4. Behavior/Invariant: Scope parsing and validation returns accessible scopes only
+   - Risk category: Security - privilege escalation prevention
+   - Level: UNIT
+   - Rationale: Test scope filtering logic without full request context
+   - Setup notes: Mock user with specific permissions, test scope validation
+```
 
 You must include:
 - Enough UNIT tests to cover major branches and edge cases in this file.
