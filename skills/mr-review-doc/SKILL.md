@@ -6,7 +6,7 @@ metadata:
   Last Updated: Jan 26, 2026
 
   Author(s):
-    - Nico Kalkusinski (for Multiverse Computing)
+    - Nico Kalkusinski
   
   Versioning:
     Scheme: Semantic Versioning (MAJOR.MINOR.PATCH)
