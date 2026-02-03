@@ -26,7 +26,7 @@ Follow the exact structure from `TEMPLATE.md` unless there is a strong reason no
 
 ## Primary deliverable:
 - Create ONE markdown file under: docs/testing/test-strategies/
-- Filename: use a descriptive kebab-case name, e.g., `[id]-test-strategy.md`
+- Filename: use a descriptive kebab-case name, e.g., `[num-id]-[module]-[ddmmyyyy].md` (example: `13-generate-user-tag-02022026.md`)
 - Write the full report into that file following `TEMPLATE.md` structure.
 - In chat, output only:
   1) the exact file path created

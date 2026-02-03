@@ -3,8 +3,8 @@ name: high-signal-comments
 description: Add skimmable, plain-English comments and docs to code you changed on the current branch, focusing on intent and constraints, not narration.
 metadata:
   author: Nico Kalkusinski
-  last updated: Feb 1, 2026
-  version: "1.0.1"
+  last updated: Feb 3, 2026
+  version: "1.1.0"
   argument-hint: <base-branch|optional>
 ---
 
@@ -17,39 +17,17 @@ Goal: engineers, reviewers, and LLM tools with zero context can read the diff an
 - `AGENTS.md` (commenting philosophy)
 - Repo style and doc conventions (JSDoc/TSDoc, Python docstrings, Go doc comments, etc.)
 
-## 0.1 Base branch (mandatory)
+## 0.1 Scope Discovery (MANDATORY START)
 
-Determine base branch in this order:
+**If the user has not already provided a specific list of files or functions, your first response MUST be to ask the following questions:**
 
-1. If user passed an argument, use it as base (example: `develop`)
-2. Else use `main` if it exists
-3. Else use `master` if it exists
+### Required inputs (developer must specify)
+1. Which **files** should be covered (paths)?
+2. Which **modules/classes/functions** should be covered (names/symbols)?
 
-If we're on `main`/`master` add the comments locally commited, not-pushed files.
+If either is missing, ask follow-ups. If the developer cannot provide them, infer likely targets from the repo and clearly label that as an assumption.
 
-Commands:
-
-- Detect branch:
-  - `git branch --list main`
-  - `git branch --list master`
-
-## 0.2 File selection (mandatory)
-
-Work on files changed on this branch:
-
-- `git diff --name-only --diff-filter=ACMRT <base>...HEAD`
-
-Exclude noise:
-
-- `**/node_modules/**`, `**/dist/**`, `**/build/**`, `**/.next/**`, `**/coverage/**`, `**/vendor/**`
-- lockfiles: `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `poetry.lock`
-- minified: `*.min.*`
-- generated snapshots: `*.snap` (unless repo convention expects documenting them)
-- vendored code and generated artifacts
-
-If a file is renamed, treat it as changed and still apply the rules.
-
-## 0.3 Writing rules (mandatory)
+## 0.2 Writing rules (mandatory)
 
 Write comments that are fast to scan.
 
@@ -71,7 +49,7 @@ Audience rules:
 - Write for engineers and LLM tools with zero context.
 - Assume the reader has the repo, but not the mental model.
 
-## 0.4 What to comment (mandatory)
+## 0.3 What to comment (mandatory)
 
 Add docs/comments only where a reader would ask “why” or “what are the rules”.
 
@@ -99,7 +77,7 @@ Do NOT add comments for:
 - obvious calculations
 - lines already explained by good naming
 
-## 0.5 Comment formats (mandatory)
+## 0.4 Comment formats (mandatory)
 
 Use the smallest format that works.
 
@@ -144,7 +122,7 @@ def send_verification_email(user_id: str) -> None:
 
 If a doc would only repeat the function name or types, do not write it.
 
-## 0.6 Fix bad comments in changed areas (mandatory)
+## 0.5 Fix bad comments in changed areas (mandatory)
 
 In changed regions, if comments are:
 
@@ -157,7 +135,7 @@ Then remove them or rewrite them into a short rule or constraint.
 
 Avoid comment-only churn outside changed context.
 
-## 0.7 Output rules (mandatory)
+## 0.6 Output rules (mandatory)
 
 Your output is a single, review-ready patch:
 
@@ -171,36 +149,24 @@ If there is nothing worth commenting, output:
 - `No comment changes needed`
 - Include the list of files checked
 
-## 1. Pre-work checklist (collect before editing)
-
-- Current branch: `git branch --show-current`
-- Base branch chosen and why
-- Changed files list (after exclusions)
-- For each changed file:
-
-  - inspect the diff hunks first
-  - identify public surfaces, rules, and non-obvious behavior in the changed hunks
-
-## 2. Execution procedure (mandatory)
+## 1. Execution procedure (mandatory)
 
 For each changed file:
 
-1. Read the diff hunks:
-   - `git diff <base>...HEAD -- <path>`
-2. Identify what needs explanation:
+1. Identify what needs explanation:
    - what rule is enforced
    - what constraint exists
    - what guarantee is intended
    - what failure mode matters
-3. Add minimal docs/comments:
+2. Add minimal docs/comments:
    - one line per rule or guarantee
    - keep wording simple and concrete
-4. Remove or rewrite vague/narration comments in the changed regions.
-5. Re-check the diff:
+3. Remove or rewrite vague/narration comments in the changed regions.
+4. Re-check the diff:
    - every new comment answers “what is the rule” or “why is this needed”
    - no new comment repeats what the code already says
 
-## 3. Quality gates (mandatory)
+## 2. Quality gates (mandatory)
 
 - Comments match the actual behavior
 - Comments are skimmable (short, plain English)
@@ -208,17 +174,16 @@ For each changed file:
 - No secrets or sensitive data in comments
 - No lint or formatting violations introduced
 
-## 4. Acceptance criteria (exact shape)
+## 3. Acceptance criteria (exact shape)
 
-- AC: Only files returned by `git diff --name-only --diff-filter=ACMRT <base>...HEAD` are modified @`git diff --name-only`
-- AC: Every changed file with non-trivial or public-facing changes has skimmable rule/constraint docs where needed @`git diff <base>...HEAD -- <path>`
+- AC: Only files returned by specified by the user are edited.
+- AC: Every changed file with non-trivial or public-facing changes has skimmable rule/constraint docs where needed
 - AC: No new comment narrates obvious code, each new comment states a rule, constraint, guarantee, or failure mode @`<path>`
 - AC: No unrelated refactors or formatting churn @`git diff`
 
 ## Definition of done (mandatory checklist)
 
-- Base branch chosen correctly (argument, else main/master)
-- Changed file list computed and exclusions applied
+- Scope of change chosen correctly
 - Added skimmable docs/comments at rules and public surfaces
 - Removed or rewrote vague/narration comments in changed regions
 - Final output is a single unified diff patch touching only changed files
